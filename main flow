@@ -1,0 +1,244 @@
+// src/main/java/com/example/todolist/TodoListApplication.java
+package com.example.todolist;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class TodoListApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(TodoListApplication.class, args);
+    }
+}
+// src/main/java/com/example/todolist/model/Task.java
+package com.example.todolist.model;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+
+@Entity
+public class Task {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String description;
+    private boolean completed;
+
+    // Getters and Setters
+}
+// src/main/java/com/example/todolist/repository/TaskRepository.java
+package com.example.todolist.repository;
+
+import com.example.todolist.model.Task;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface TaskRepository extends JpaRepository<Task, Long> {
+}
+// src/main/java/com/example/todolist/service/TaskService.java
+package com.example.todolist.service;
+
+import com.example.todolist.model.Task;
+import com.example.todolist.repository.TaskRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class TaskService {
+    @Autowired
+    private TaskRepository taskRepository;
+
+    public List<Task> findAll() {
+        return taskRepository.findAll();
+    }
+
+    public Task save(Task task) {
+        return taskRepository.save(task);
+    }
+
+    public void deleteById(Long id) {
+        taskRepository.deleteById(id);
+    }
+}
+// src/main/java/com/example/todolist/controller/TaskController.java
+package com.example.todolist.controller;
+
+import com.example.todolist.model.Task;
+import com.example.todolist.service.TaskService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/tasks")
+public class TaskController {
+    @Autowired
+    private TaskService taskService;
+
+    @GetMapping
+    public List<Task> getTasks() {
+        return taskService.findAll();
+    }
+
+    @PostMapping
+    public Task addTask(@RequestBody Task task) {
+        return taskService.save(task);
+    }
+
+    @PutMapping("/{id}")
+    public Task updateTask(@PathVariable Long id, @RequestBody Task task) {
+        Task existingTask = taskService.findById(id);
+        existingTask.setDescription(task.getDescription());
+        existingTask.setCompleted(task.isCompleted());
+        return taskService.save(existingTask);
+    }
+
+    @DeleteMapping("/{id}")
+    public void deleteTask(@PathVariable Long id) {
+        taskService.deleteById(id);
+    }
+}
+<!-- src/main/resources/static/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do List</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="todo-list">
+        <h1>To-Do List</h1>
+        <input type="text" id="new-task" placeholder="Add a new task">
+        <button onclick="addTask()">Add Task</button>
+        <ul id="tasks"></ul>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+/* src/main/resources/static/styles.css */
+.todo-list {
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.todo-list h1 {
+    margin-bottom: 20px;
+}
+
+.todo-list input {
+    width: calc(100% - 80px);
+    padding: 10px;
+    margin-right: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.todo-list button {
+    padding: 10px;
+    border: none;
+    background-color: #28a745;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.todo-list button:hover {
+    background-color: #218838;
+}
+
+.todo-list ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+.todo-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+.todo-list li.completed span {
+    text-decoration: line-through;
+    color: #999;
+}
+
+.todo-list li button {
+    background-color: #dc3545;
+    border: none;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.todo-list li button:hover {
+    background-color: #c82333;
+}
+// src/main/resources/static/script.js
+document.addEventListener('DOMContentLoaded', loadTasks);
+
+function loadTasks() {
+    fetch('/api/tasks')
+        .then(response => response.json())
+        .then(tasks => {
+            const taskList = document.getElementById('tasks');
+            taskList.innerHTML = '';
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                li.className = task.completed ? 'completed' : '';
+                li.innerHTML = `
+                    <span onclick="toggleTask(${task.id}, ${task.completed})">${task.description}</span>
+                    <button onclick="deleteTask(${task.id})">Delete</button>
+                `;
+                taskList.appendChild(li);
+            });
+        });
+}
+
+function addTask() {
+    const newTaskInput = document.getElementById('new-task');
+    const task = {
+        description: newTaskInput.value,
+        completed: false
+    };
+
+    fetch('/api/tasks', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(task)
+    }).then(() => {
+        newTaskInput.value = '';
+        loadTasks();
+    });
+}
+
+function toggleTask(id, completed) {
+    fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ completed: !completed })
+    }).then(() => loadTasks());
+}
+
+function deleteTask(id) {
+    fetch(`/api/tasks/${id}`, {
+        method: 'DELETE'
+    }).then(() => loadTasks());
+}
+./mvnw spring-boot:run
